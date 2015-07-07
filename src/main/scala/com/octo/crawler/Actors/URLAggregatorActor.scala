@@ -74,10 +74,10 @@ class URLAggregatorActor extends Actor {
     future.onComplete(x => {
       println( s"""Number of crawled URLs : ${numberOfCrawledURL}""")
       println( s"""Number of crawling URLs : ${numberOfInCrawlingURL}""")
-      println( s"""Speed : ${numberOfCrawledURL / ((System.currentTimeMillis() - URLAggregatorActor.startTime) / 1000)} url/s""")
+      println( s"""Speed : ${(numberOfCrawledURL / (System.currentTimeMillis() + 1 - URLAggregatorActor.startTime)) / 1000} url/s""")
       context.system.shutdown()
+
       ActorMain.running = false
-      System.exit(0);
     })
   }
 

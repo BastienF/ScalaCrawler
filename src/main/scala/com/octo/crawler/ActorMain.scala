@@ -17,9 +17,9 @@ object ActorMain {
 
     val urlAggregator = system.actorOf(Props[URLAggregatorActor], name = "aggregator")
     urlAggregator ! System.getProperty("startUrl")
-    while (running) {
-      urlAggregator ! readLine()
-    }
-    System.exit(0);
+    if (System.getProperty("notTTY") == null)
+      while (running) {
+        urlAggregator ! readLine()
+      }
   }
 }
