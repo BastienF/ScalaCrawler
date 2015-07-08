@@ -1,13 +1,13 @@
 package com.octo.crawler.Actors
 
 import akka.actor.{Actor, Props}
-import akka.routing.RoundRobinPool
-import com.octo.crawler.ActorMain
 import akka.pattern.ask
+import akka.routing.RoundRobinPool
+import akka.util.Timeout
+import com.octo.crawler.ActorMain
 
 import scala.annotation.tailrec
-import scala.concurrent.Await
-import akka.util.Timeout
+import scala.collection.mutable
 import scala.concurrent.duration._
 
 /**
@@ -15,66 +15,64 @@ import scala.concurrent.duration._
  */
 class URLAggregatorActor extends Actor {
 
-  override def receive: Receive = {
-    case url: String => crawlURLs(Set(url), URLAggregatorActor.depth, "", Map[String, (Int, String)](), Set[String](), 0, 1)
-    case x => println( s"""I don't know how to handle ${x}""")
-  }
+  import URLAggregatorActor._;
 
-  def running(urlsInError: Map[String, (Int, String)], crawledUrls: Set[String], crawledUrlNb: Int, inCrawlingUrlNb: Int): Receive = {
-    case "print" => printResult(crawledUrls, crawledUrlNb, inCrawlingUrlNb)
-    case "printErrors" => printErrors(urlsInError)
+  override def receive: Receive = {
+    case "print" => printResult()
+    case "printErrors" => printErrors()
+    case url: String => crawlURLs(Set(url), URLAggregatorActor.depth, "")
     case (requestBody: String, remainingDepth: Int, refererUrl: String, (urlHost: String, urlPort: String, urlProtocolString)) => {
       //TODO passer en fwd
       URLAggregatorActor.parserActor !(requestBody, remainingDepth, refererUrl, (urlHost, urlPort, urlProtocolString))
     }
-    case (code: Int, url: String, refererUrl: String) if code == -1 => {
-      urlCrawlingDone(urlsInError.updated(url, (code, refererUrl)), crawledUrls, crawledUrlNb, inCrawlingUrlNb)
-    }
     case (code: Int, url: String, refererUrl: String) => {
-      context.become(running(urlsInError.updated(url, (code, refererUrl)), crawledUrls, crawledUrlNb, inCrawlingUrlNb))
+      urlsInError.update(url, (code, refererUrl))
+      if (code == -1)
+        urlCrawlingDone()
     }
     case (urls: Set[String], remainingDepth: Int, refererUrl: String) => {
-        crawlURLs(urls, remainingDepth - 1, refererUrl, urlsInError, crawledUrls, crawledUrlNb, inCrawlingUrlNb)
+      crawlURLs(urls, remainingDepth - 1, refererUrl)
     }
     case x => println( s"""I don't know how to handle ${x}""")
   }
 
   @tailrec
-  private def crawlURLs(urls: Set[String], remainingDepth: Int, refererUrl: String, urlsInError: Map[String, (Int, String)], crawledUrls: Set[String], crawledUrlNb: Int, inCrawlingUrlNb: Int): Unit = {
+  private def crawlURLs(urls: Set[String], remainingDepth: Int, refererUrl: String): Unit = {
     urls match {
       case urls: Set[String] if urls.size == 0 => {
-        urlCrawlingDone(urlsInError, crawledUrls, crawledUrlNb, inCrawlingUrlNb)
+        urlCrawlingDone()
       }
       case urls: Set[String] => {
         if (remainingDepth > 0) {
           val haveToCrawl: Boolean = !(crawledUrls contains (urls head))
           if (haveToCrawl) {
             crawlUrl(urls head, remainingDepth, refererUrl)
+            inCrawlingUrlNb += 1
           }
-          crawlURLs(urls tail, remainingDepth, refererUrl, urlsInError, crawledUrls + (urls head), crawledUrlNb,
-            if (haveToCrawl) inCrawlingUrlNb + 1 else inCrawlingUrlNb)
+          crawlURLs(urls tail, remainingDepth, refererUrl)
         } else {
-          crawlURLs(Set(), remainingDepth, refererUrl, urlsInError, crawledUrls, crawledUrlNb, inCrawlingUrlNb)
+          crawlURLs(Set(), remainingDepth, refererUrl)
         }
       }
     }
   }
 
-  def urlCrawlingDone(urlsInError: Map[String, (Int, String)], crawledUrls: Set[String], crawledUrlNb: Int, inCrawlingUrlNb: Int): Unit = {
-    context.become(running(urlsInError, crawledUrls, crawledUrlNb + 1, inCrawlingUrlNb - 1))
-    if (inCrawlingUrlNb <= 1) {
-      sthap(urlsInError, crawledUrlNb + 1, inCrawlingUrlNb - 1)
+  def urlCrawlingDone(): Unit = {
+    crawledUrlNb += 1
+    inCrawlingUrlNb -= 1
+    if (inCrawlingUrlNb <= 0) {
+      sthap()
     }
   }
 
-  def sthap(result: Map[String, (Int, String)], numberOfCrawledURL:Int, numberOfInCrawlingURL:Int): Unit = {
+  def sthap(): Unit = {
     import context.dispatcher
     implicit val timeout = Timeout(15 seconds)
-    val future = URLAggregatorActor.displayActor ? ("flush", result)
+    val future = URLAggregatorActor.displayActor ?("flush", urlsInError)
     future.onComplete(x => {
-      println( s"""Number of crawled URLs : ${numberOfCrawledURL}""")
-      println( s"""Number of crawling URLs : ${numberOfInCrawlingURL}""")
-      println( s"""Speed : ${(numberOfCrawledURL / (System.currentTimeMillis() + 1 - URLAggregatorActor.startTime)) / 1000} url/s""")
+      println( s"""Number of crawled URLs : ${crawledUrlNb}""")
+      println( s"""Number of crawling URLs : ${inCrawlingUrlNb}""")
+      println( s"""Speed : ${crawledUrlNb / Math.max(1, (System.currentTimeMillis() - URLAggregatorActor.startTime) / 1000)} url/s""")
       context.system.shutdown()
 
       ActorMain.running = false
@@ -83,18 +81,19 @@ class URLAggregatorActor extends Actor {
 
   def crawlUrl(url: String, remainingDepth: Int, refererUrl: String) = {
     URLAggregatorActor.crawlActor !(url, remainingDepth, refererUrl)
+    crawledUrls.add(url)
   }
 
-  def printResult(result: Set[String], numberOfCrawledURL: Int, numberOfInCrawlingURL: Int): Unit = {
+  def printResult(): Unit = {
     println("Start agregating")
-    println( s"""Number of crawled URLs : ${numberOfCrawledURL}""")
-    println( s"""Number of crawling URLs : ${numberOfInCrawlingURL}""")
-    println( s"""Speed : ${numberOfCrawledURL / ((System.currentTimeMillis() - URLAggregatorActor.startTime) / 1000)} url/s""")
-    URLAggregatorActor.displayActor ! result
+    println( s"""Number of crawled URLs : ${crawledUrlNb}""")
+    println( s"""Number of crawling URLs : ${inCrawlingUrlNb}""")
+    println( s"""Speed : ${crawledUrlNb / Math.max(1, (System.currentTimeMillis() - URLAggregatorActor.startTime) / 1000)} url/s""")
+    URLAggregatorActor.displayActor ! crawledUrls
   }
 
-  def printErrors(result: Map[String, (Int, String)]): Unit = {
-    URLAggregatorActor.displayActor !("errors", result)
+  def printErrors(): Unit = {
+    URLAggregatorActor.displayActor !("errors", urlsInError)
   }
 
   object URLAggregatorActor {
@@ -103,6 +102,12 @@ class URLAggregatorActor extends Actor {
     val crawlActor = context.actorOf(RoundRobinPool(16).props(Props[CrawlActor]), "crawlerRouter")
     val parserActor = context.actorOf(RoundRobinPool(Runtime.getRuntime().availableProcessors()).props(Props[ParserActor]), "parserRouter")
     val displayActor = context.actorOf(RoundRobinPool(1).props(Props[DisplayMapActor]), "displayRouter")
+
+    val urlsInError = mutable.Map[String, (Int, String)]()
+    val crawledUrls = mutable.Set[String]()
+    var crawledUrlNb = 0
+    var inCrawlingUrlNb = 1
+
   }
 
 }
