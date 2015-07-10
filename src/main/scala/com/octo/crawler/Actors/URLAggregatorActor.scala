@@ -73,6 +73,7 @@ class URLAggregatorActor extends Actor {
       println( s"""Number of crawled URLs : ${crawledUrlNb}""")
       println( s"""Number of crawling URLs : ${inCrawlingUrlNb}""")
       println( s"""Speed : ${crawledUrlNb / Math.max(1, (System.currentTimeMillis() - URLAggregatorActor.startTime) / 1000)} url/s""")
+      println( s"""Crawling done in : ${(System.currentTimeMillis() - URLAggregatorActor.startTime) / 1000}s""")
       context.system.shutdown()
 
       ActorMain.running = false

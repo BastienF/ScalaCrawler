@@ -1,6 +1,6 @@
 package com.octo.crawler.Actors
 
-import java.net.SocketTimeoutException
+import java.net.{ConnectException, SocketTimeoutException}
 
 import akka.actor.Actor
 
@@ -75,7 +75,7 @@ class CrawlActor extends Actor {
         }
       }
     } catch {
-      case e: SocketTimeoutException if retry > 0 => {
+      case e: SocketTimeoutException|ConnectException if retry > 0 => {
         println( s"""retry #${retry - CrawlActor.retryNumber} : ${url2}""")
         Thread sleep 1000
         executeRequest(url2, remainingDepth, refererUrl, retry - 1)

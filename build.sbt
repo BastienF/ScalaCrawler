@@ -11,6 +11,11 @@ resolvers ++= Seq(
   "Maven Central Server" at "http://repo1.maven.org/maven2"
 )
 
+val buildSettings = Defaults.defaultSettings ++ Seq(
+  javaOptions += "-Xmx4G",
+  javaOptions += "-Xms4G"
+)
+
 libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-actor" % "2.3.8",
   "com.typesafe.akka" %% "akka-slf4j" % "2.3.8",
