@@ -32,6 +32,6 @@ class ParserActor extends Actor {
 }
 
 object ParserActor {
-  val uriPattern = """[0-9A-z./?=#;,&:-]*"""
-  val regexes: Set[(Regex, Boolean)] = Set(( s"""href="(/$uriPattern)"""".r, true)) ++ System.getProperty("hosts").split(",").map(host => ( s"""($host$uriPattern)""".r, false))
+  val uriPattern = """[0-9A-z_./?=#\(\)\[\];,%&:-]*"""
+  val regexes: Set[(Regex, Boolean)] = Set(( s"""href="(/$uriPattern)"""".r, true)) ++ System.getProperty("hosts").split(",").map(host => ( s"""["|']($host$uriPattern)["|']""".r, false))
 }
