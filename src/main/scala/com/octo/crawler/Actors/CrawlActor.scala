@@ -77,7 +77,7 @@ class CrawlActor extends Actor {
     } catch {
       case e @ (_ : SocketTimeoutException | _ : ConnectException) if retry > 0 => {
         println( s"""retry #${CrawlActor.retryNumber - (retry - 1)} : ${url2} | error: ${e}""")
-        Thread sleep 500 + (500 * CrawlActor.retryNumber - (retry - 1))
+        Thread sleep 500 + (1500 * CrawlActor.retryNumber - (retry))
         executeRequest(url2, remainingDepth, refererUrl, retry - 1)
       }
       case e: Exception => {
