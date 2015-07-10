@@ -89,7 +89,10 @@ class URLAggregatorActor extends Actor {
     println("Start agregating")
     println( s"""Number of crawled URLs : ${crawledUrlNb}""")
     println( s"""Number of crawling URLs : ${inCrawlingUrlNb}""")
-    println( s"""Speed : ${crawledUrlNb / Math.max(1, (System.currentTimeMillis() - URLAggregatorActor.startTime) / 1000)} url/s""")
+    val currentTime = System.currentTimeMillis()
+    println( s"""Speed : ${crawledUrlNb / Math.max(1, (currentTime - URLAggregatorActor.startTime) / 1000)} url/s""")
+    println( s"""Instant speed : ${crawledUrlNb / Math.max(1, (currentTime - timeLaps) / 1000)} url/s""")
+    timeLaps = currentTime
     URLAggregatorActor.displayActor ! crawledUrls
   }
 
@@ -100,7 +103,8 @@ class URLAggregatorActor extends Actor {
   object URLAggregatorActor {
     val depth = System.getProperty("depth").toInt
     val startTime = System.currentTimeMillis()
-    val crawlActor = context.actorOf(RoundRobinPool(16).props(Props[CrawlActor]), "crawlerRouter")
+    var timeLaps = startTime
+    val crawlActor = context.actorOf(RoundRobinPool(Runtime.getRuntime().availableProcessors()).props(Props[CrawlActor]), "crawlerRouter")
     val parserActor = context.actorOf(RoundRobinPool(Runtime.getRuntime().availableProcessors()).props(Props[ParserActor]), "parserRouter")
     val displayActor = context.actorOf(RoundRobinPool(1).props(Props[DisplayMapActor]), "displayRouter")
 
