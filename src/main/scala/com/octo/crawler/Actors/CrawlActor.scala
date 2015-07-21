@@ -1,8 +1,10 @@
 package com.octo.crawler.Actors
 
 import java.net.{ConnectException, SocketTimeoutException}
+import javax.net.ssl.SSLSocketFactory
 
 import akka.actor.Actor
+import sun.security.ssl.SSLSocketFactoryImpl
 
 import scalaj.http.{HttpRequest, Http, HttpOptions, HttpResponse}
 
@@ -49,6 +51,7 @@ class CrawlActor extends Actor {
       }
       val response: HttpResponse[String] =
         setAuth(setProxy(Http(url2))).option(HttpOptions.allowUnsafeSSL).asString
+
 
       val urlJava = new java.net.URL(url2)
       val urlProperties = (urlJava getHost, if ((urlJava getPort) < 0) {

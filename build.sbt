@@ -7,6 +7,15 @@ scalaVersion := "2.11.4"
 
 mainClass in Compile := Some("com.octo.crawler.ActorMain")
 
+lazy val commonSettings = Seq(
+  version := "0.1-SNAPSHOT",
+  organization := "com.example",
+  scalaVersion := "2.10.1"
+)
+
+lazy val app = (project in file("app")).
+  settings(commonSettings: _*)
+
 resolvers ++= Seq(
   "Maven Central Server" at "http://repo1.maven.org/maven2"
 )

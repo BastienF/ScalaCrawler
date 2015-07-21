@@ -91,8 +91,9 @@ class URLAggregatorActor extends Actor {
     println( s"""Number of crawling URLs : ${inCrawlingUrlNb}""")
     val currentTime = System.currentTimeMillis()
     println( s"""Speed : ${crawledUrlNb / Math.max(1, (currentTime - URLAggregatorActor.startTime) / 1000)} url/s""")
-    println( s"""Instant speed : ${crawledUrlNb / Math.max(1, (currentTime - timeLaps) / 1000)} url/s""")
+    println( s"""Instant speed : ${(crawledUrlNb - crawledUrlNbLaps) / Math.max(1, (currentTime - timeLaps) / 1000)} url/s""")
     timeLaps = currentTime
+    crawledUrlNbLaps = crawledUrlNb
     URLAggregatorActor.displayActor ! crawledUrls
   }
 
@@ -111,6 +112,7 @@ class URLAggregatorActor extends Actor {
     val urlsInError = mutable.Map[String, (Int, String)]()
     val crawledUrls = mutable.Set[String]()
     var crawledUrlNb = 0
+    var crawledUrlNbLaps = 0
     var inCrawlingUrlNb = 1
 
   }

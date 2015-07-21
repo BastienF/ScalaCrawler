@@ -16,6 +16,7 @@ object ActorMain {
     val system = ActorSystem("CrawlerSystem")
 
     val urlAggregator = system.actorOf(Props[URLAggregatorActor], name = "aggregator")
+
     urlAggregator ! System.getProperty("startUrl")
     if (System.getProperty("notTTY") == null)
       while (running) {
