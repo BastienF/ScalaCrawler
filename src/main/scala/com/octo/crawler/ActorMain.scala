@@ -1,9 +1,6 @@
 package com.octo.crawler
 
-import akka.actor.{ActorSystem, Props}
-import com.octo.crawler.Actors.URLAggregatorActor
-
-import scala.io.StdIn.readLine
+import akka.actor._
 
 /**
  * Created by bastien on 05/01/2015.
@@ -15,12 +12,30 @@ object ActorMain {
   def main(args: Array[String]) {
     val system = ActorSystem("CrawlerSystem")
 
-    val urlAggregator = system.actorOf(Props[URLAggregatorActor], name = "aggregator")
-
-    urlAggregator ! System.getProperty("startUrl")
-    if (System.getProperty("notTTY") == null)
-      while (running) {
-        urlAggregator ! readLine()
+    def httpBasicAuthFormatter(httpBasicAuth: String): (String, String) = {
+      if (httpBasicAuth == null || httpBasicAuth.isEmpty)
+        ("", "")
+      else {
+        val basicAuthSplited: Array[String] = httpBasicAuth.split(":")
+        (basicAuthSplited(0), basicAuthSplited(1))
       }
+    }
+
+    val httpBasicAuth: (String, String) = httpBasicAuthFormatter(System.getProperty("basicAuth"))
+
+
+    val webCrawler: ModulableWebCrawler = new ModulableWebCrawler(System.getProperty("hosts").split(",").toSet,
+      System.getProperty("depth").toInt, System.getProperty("retryNumber").toInt, httpBasicAuth._1, httpBasicAuth._2,
+      System.getProperty("proxyUrl"), System.getProperty("proxyPort").toInt)
+
+    webCrawler.crawledWebPageObservable.subscribe(crawledPage => handleCrawledPage(crawledPage))
+
+    webCrawler.startCrawling(System.getProperty("startUrl"))
+
+
+  }
+
+  def handleCrawledPage(crawledPage: CrawledPage): Unit = {
+    println(crawledPage.errorCode + ": " + crawledPage.url)
   }
 }

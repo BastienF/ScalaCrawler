@@ -2,11 +2,8 @@ package com.octo.crawler.Actors
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
-
 import akka.actor.Actor
-
 import scala.collection.mutable
-
 
 /**
  * Created by bastien on 06/01/2015.

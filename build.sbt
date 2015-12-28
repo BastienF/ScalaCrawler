@@ -30,7 +30,8 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-slf4j" % "2.3.8",
   "com.typesafe.akka" %% "akka-remote" % "2.3.8",
   "com.typesafe.akka" %% "akka-agent" % "2.3.8",
-  "org.scalaj" %% "scalaj-http" % "1.1.0"
+  "org.scalaj" %% "scalaj-http" % "1.1.0",
+  "io.reactivex" %% "rxscala" % "0.25.1"
 )
 
 

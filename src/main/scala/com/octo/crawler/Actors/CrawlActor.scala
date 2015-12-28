@@ -1,18 +1,15 @@
 package com.octo.crawler.Actors
 
-import java.net.{ConnectException, SocketTimeoutException}
-import javax.net.ssl.SSLSocketFactory
-
-import akka.actor.Actor
-import sun.security.ssl.SSLSocketFactoryImpl
-
-import scalaj.http.{HttpRequest, Http, HttpOptions, HttpResponse}
+import java.net._
+import akka.actor.{Actor, Props}
+import com.octo.crawler.Actors.messages.CrawlActorResponse
+import scalaj.http.{Http, HttpOptions, HttpRequest, HttpResponse}
 
 
 /**
  * Created by bastien on 05/01/2015.
  */
-class CrawlActor extends Actor {
+class CrawlActor(val retryNumberOnError: Int, httpBasicAuthLogin: String, httpBasicAuthPwd: String, proxyUrl: String, proxyPort: Int) extends Actor {
 
   override def receive: Receive = {
     case (url: String, remainingDepth: Int, refererUrl: String) => crawlUrl(url, remainingDepth, refererUrl)
@@ -20,7 +17,7 @@ class CrawlActor extends Actor {
 
   def crawlUrl(url: String, remainingDepth: Int, refererUrl: String): Unit = {
     try {
-      executeRequest(url, remainingDepth, refererUrl, CrawlActor.retryNumber)
+      executeRequest(url, remainingDepth, refererUrl, retryNumberOnError)
     } catch {
       case e: Exception => {
         println( s"""HTTP request error on ${url} with ${e}""")
@@ -29,36 +26,14 @@ class CrawlActor extends Actor {
     }
   }
 
-  private final def executeRequest(url2: String, remainingDepth: Int, refererUrl: String, retry: Int): Unit = {
+  private final def executeRequest(url: String, remainingDepth: Int, refererUrl: String, retry: Int): Unit = {
     val aggregator = sender()
+    val urlProperties = getUrlProperies(url)
     try {
-
-      def setProxy(request:HttpRequest) = {
-        val proxyUrl: String = System.getProperty("proxyUrl")
-        if (proxyUrl == null || proxyUrl.isEmpty)
-          request
-        else
-          request.proxy(proxyUrl, System.getProperty("proxyPort").toInt)
-      }
-      def setAuth(request:HttpRequest) = {
-        val basicAuth: String = System.getProperty("basicAuth")
-        if (basicAuth == null || basicAuth.isEmpty)
-          request
-        else {
-          val basicAuthSplited:Array[String] = basicAuth.split(":")
-          request.auth(basicAuthSplited(0), basicAuthSplited(1))
-        }
-      }
       val response: HttpResponse[String] =
-        setAuth(setProxy(Http(url2))).option(HttpOptions.allowUnsafeSSL).asString
+        setAuth(setProxy(Http(url))).option(HttpOptions.allowUnsafeSSL).asString
 
-
-      val urlJava = new java.net.URL(url2)
-      val urlProperties = (urlJava getHost, if ((urlJava getPort) < 0) {
-        ""
-      } else {
-        ":" + urlJava.getPort
-      }, (urlJava getProtocol) + "://")
+      aggregator ! new CrawlActorResponse(response.code, response.body, remainingDepth, url, refererUrl, urlProperties)
 
       if (response.is3xx) {
         val redirectURL: Option[String] = response.headers.get("Location")
@@ -69,29 +44,46 @@ class CrawlActor extends Actor {
             else
               redirectURL.get
           }
-          executeRequest(redirectAbs, remainingDepth, url2, retry - 1)
-        }
-      } else {
-        aggregator !(response.body, remainingDepth, url2, urlProperties)
-        if (!response.is2xx) {
-          aggregator !(response.code, url2, refererUrl)
+          executeRequest(redirectAbs, remainingDepth, url, retry - 1)
         }
       }
     } catch {
-      case e @ (_ : SocketTimeoutException | _ : ConnectException) if retry > 0 => {
-        println( s"""retry #${CrawlActor.retryNumber - (retry - 1)} : ${url2} | error: ${e}""")
-        Thread sleep 500 + (1500 * CrawlActor.retryNumber - (retry))
-        executeRequest(url2, remainingDepth, refererUrl, retry - 1)
+      case e@(_: SocketTimeoutException | _: ConnectException) if retry > 0 => {
+        println( s"""retry #${retryNumberOnError - (retry - 1)} : ${url}| error: ${e}""")
+        Thread sleep 500 + (1500 * retryNumberOnError - (retry))
+        executeRequest(url, remainingDepth, refererUrl, retry - 1)
       }
       case e: Exception => {
-        println( s"""HTTP request error on ${url2} with ${e}""")
-        aggregator ! (-1, url2, refererUrl)
+        println( s"""HTTP request error on ${url} with ${e}""")
+        aggregator ! new CrawlActorResponse(-1, "", remainingDepth, url, refererUrl, urlProperties)
       }
     }
   }
 
+  def getUrlProperies(url: String): (String, String, String) = {
+    val urlJava = new java.net.URL(url)
+    (urlJava getHost, if ((urlJava getPort) < 0) {
+      ""
+    } else {
+      ":" + urlJava.getPort
+    }, (urlJava getProtocol) + "://")
+  }
+
+  def setProxy(request: HttpRequest) = {
+    if (proxyUrl == null || proxyUrl.isEmpty)
+      request
+    else
+      request.proxy(proxyUrl, proxyPort)
+  }
+  def setAuth(request: HttpRequest) = {
+    if (httpBasicAuthLogin == null || httpBasicAuthLogin.isEmpty)
+      request
+    else {
+      request.auth(httpBasicAuthLogin, httpBasicAuthPwd)
+    }
+  }
 }
 
 object CrawlActor {
-  val retryNumber = System.getProperty("retryNumber").toInt
+  def props(retryNumberOnError: Int, httpBasicAuthLogin: String, httpBasicAuthPwd: String, proxyUrl: String, proxyPort: Int): Props = Props(new CrawlActor(retryNumberOnError, httpBasicAuthLogin, httpBasicAuthPwd, proxyUrl, proxyPort))
 }
