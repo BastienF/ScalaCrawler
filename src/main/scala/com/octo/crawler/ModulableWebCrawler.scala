@@ -14,10 +14,13 @@ class ModulableWebCrawler(val hostsToCrawl: Set[String], crawlingDepth: Int = 0,
   val crawlActor = system.actorOf(RoundRobinPool(Runtime.getRuntime().availableProcessors()).props(CrawlActor.props(retryNumberOnError, httpBasicAuthLogin, httpBasicAuthPwd, proxyUrl, proxyPort)), "crawlerRouter")
   val parserActor = system.actorOf(RoundRobinPool(Runtime.getRuntime().availableProcessors()).props(ParserActor.props(hostsToCrawl)), "parserRouter")
   val urlAggregator = system.actorOf(URLAggregatorActor.props(crawlingDepth, crawlActor, parserActor), name = "aggregator")
-  val crawledWebPageObservable: Observable[CrawledPage] = Observable { observer =>
-    urlAggregator ! Subscribe(observer onNext)
-    new Subscription {
-      override def unsubscribe: Unit = urlAggregator ! Unsubscribe
+
+  def addObservable():Observable[CrawledPage] = {
+    Observable { observer =>
+      urlAggregator ! Subscribe(observer onNext)
+      new Subscription {
+        override def unsubscribe: Unit = urlAggregator ! Unsubscribe
+      }
     }
   }
 

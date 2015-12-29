@@ -23,7 +23,7 @@ class ParserActor(val hostsToCrawl: Set[String]) extends Actor {
           ).toSet
         res ++ (
           if (elem._2) {
-            foundUrls.map(url => urlProtocolString + urlHost + urlPort + "/" + url)
+            foundUrls.map(url => urlProtocolString + urlHost + urlPort + (if (!url.isEmpty && url.charAt(0).equals('/')) "" else "/") + url)
           }
           else {
             foundUrls

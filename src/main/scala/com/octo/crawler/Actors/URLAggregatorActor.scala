@@ -5,7 +5,7 @@ import akka.pattern.ask
 import akka.routing.RoundRobinPool
 import akka.util.Timeout
 import com.octo.crawler.Actors.messages.{CrawlActorResponse, Subscribe}
-import com.octo.crawler.{ActorMain, CrawledPage}
+import com.octo.crawler.{DemoMain, CrawledPage}
 
 import scala.annotation.tailrec
 import scala.collection.mutable
@@ -64,7 +64,7 @@ class URLAggregatorActor(val crawlingDepth: Int, crawlActor: ActorRef, parserAct
       println( s"""Crawling done in : ${(System.currentTimeMillis() - URLAggregatorActor.startTime) / 1000}s""")
       context.system.shutdown()
 
-      ActorMain.running = false
+      DemoMain.running = false
     })
   }
 

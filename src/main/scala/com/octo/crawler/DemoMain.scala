@@ -5,7 +5,7 @@ import akka.actor._
 /**
  * Created by bastien on 05/01/2015.
  */
-object ActorMain {
+object DemoMain {
 
   var running: Boolean = true
 
@@ -23,12 +23,13 @@ object ActorMain {
 
     val httpBasicAuth: (String, String) = httpBasicAuthFormatter(System.getProperty("basicAuth"))
 
-
+    val proxyPortString: String = System.getProperty("proxyPort");
+    val proxyPort: Int = if (proxyPortString == null || proxyPortString.isEmpty) 0 else proxyPortString.toInt
     val webCrawler: ModulableWebCrawler = new ModulableWebCrawler(System.getProperty("hosts").split(",").toSet,
       System.getProperty("depth").toInt, System.getProperty("retryNumber").toInt, httpBasicAuth._1, httpBasicAuth._2,
-      System.getProperty("proxyUrl"), System.getProperty("proxyPort").toInt)
+      System.getProperty("proxyUrl"), proxyPort)
 
-    webCrawler.crawledWebPageObservable.subscribe(crawledPage => handleCrawledPage(crawledPage))
+    webCrawler.addObservable().filter(crawledPage => crawledPage.errorCode < 200 || crawledPage.errorCode >= 400).subscribe(crawledPage => handleCrawledPage(crawledPage))
 
     webCrawler.startCrawling(System.getProperty("startUrl"))
 
@@ -36,6 +37,6 @@ object ActorMain {
   }
 
   def handleCrawledPage(crawledPage: CrawledPage): Unit = {
-    println(crawledPage.errorCode + ": " + crawledPage.url)
+    println(crawledPage.errorCode + ": " + crawledPage.url + " , " + crawledPage.refererUrl)
   }
 }
