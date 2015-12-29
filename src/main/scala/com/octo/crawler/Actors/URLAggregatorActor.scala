@@ -6,6 +6,7 @@ import akka.routing.RoundRobinPool
 import akka.util.Timeout
 import com.octo.crawler.Actors.messages.{CrawlActorResponse, Subscribe}
 import com.octo.crawler.{DemoMain, CrawledPage}
+import rx.lang.scala.Subscriber
 
 import scala.annotation.tailrec
 import scala.collection.mutable
@@ -19,28 +20,24 @@ class URLAggregatorActor(val crawlingDepth: Int, crawlActor: ActorRef, parserAct
   import URLAggregatorActor._;
 
   override def receive = {
-    case Subscribe(onNext) => context become ready(onNext::Nil)
+    case Subscribe(subscriber) => context become ready(subscriber::Nil)
   }
 
-  def ready(onNextList: List[CrawledPage => Unit]): Receive = {
-    case Subscribe(onNext) => context become ready(onNext::onNextList)
+  def ready(subscriberList: List[Subscriber[CrawledPage]]): Receive = {
+    case Subscribe(subscriber) => context become ready(subscriber::subscriberList)
     case "print" => printResult()
     case "printErrors" => printErrors()
+    case "crawlingDone" => sthap(subscriberList)
     case url: String => crawlURLs(Set(url), crawlingDepth, "")
     case CrawlActorResponse(responseCode : Int, responseBody : String, remainingDepth: Int, url: String, refererUrl: String, (urlHost: String, urlPort: String, urlProtocolString)) => {
       //TODO à faire en asynchrone
-      onNextList.foreach(onNext => onNext(new CrawledPage(url, responseCode, responseBody, refererUrl)))
-      if (responseCode >= 200 && responseCode < 300)
+      subscriberList.foreach(subscriber => subscriber.onNext(new CrawledPage(url, responseCode, responseBody, refererUrl)))
+      if (responseCode < 300 || responseCode >= 400)
         parserActor !(responseBody, remainingDepth, refererUrl, (urlHost, urlPort, urlProtocolString))
-      else if (responseCode < 300 && responseCode >= 400) {
-        urlsInError.update(url, (responseCode, refererUrl))
-        if (responseCode == -1)
-          urlCrawlingDone()
-      }
-
     }
     case (urls: Set[String], remainingDepth: Int, refererUrl: String) => {
       crawlURLs(urls, remainingDepth - 1, refererUrl)
+      urlCrawlingDone()
     }
     case x => println( s"""I don't know how to handle ${x}""")
   }
@@ -49,23 +46,14 @@ class URLAggregatorActor(val crawlingDepth: Int, crawlActor: ActorRef, parserAct
     crawledUrlNb += 1
     inCrawlingUrlNb -= 1
     if (inCrawlingUrlNb <= 0) {
-      sthap()
+      self ! "crawlingDone"
     }
   }
 
-  def sthap(): Unit = {
-    import context.dispatcher
-    implicit val timeout = Timeout(15 seconds)
-    val future = URLAggregatorActor.displayActor ?("flush", urlsInError)
-    future.onComplete(x => {
-      println( s"""Number of crawled URLs : ${crawledUrlNb}""")
-      println( s"""Number of crawling URLs : ${inCrawlingUrlNb}""")
-      println( s"""Speed : ${crawledUrlNb / Math.max(1, (System.currentTimeMillis() - URLAggregatorActor.startTime) / 1000)} url/s""")
-      println( s"""Crawling done in : ${(System.currentTimeMillis() - URLAggregatorActor.startTime) / 1000}s""")
-      context.system.shutdown()
-
-      DemoMain.running = false
-    })
+  def sthap(subscriberList: List[Subscriber[CrawledPage]]): Unit = {
+    //TODO à faire en asynchrone
+    subscriberList.foreach(subscriber => subscriber.onCompleted())
+    context.system.shutdown()
   }
 
   def crawlUrl(url: String, remainingDepth: Int, refererUrl: String) = {
@@ -93,7 +81,7 @@ class URLAggregatorActor(val crawlingDepth: Int, crawlActor: ActorRef, parserAct
   private def crawlURLs(urls: Set[String], remainingDepth: Int, refererUrl: String): Unit = {
     urls match {
       case urls: Set[String] if urls.size == 0 => {
-        urlCrawlingDone()
+
       }
       case urls: Set[String] => {
         if (remainingDepth > 0) {
@@ -118,7 +106,7 @@ class URLAggregatorActor(val crawlingDepth: Int, crawlActor: ActorRef, parserAct
     var timeLaps = startTime
     var crawledUrlNb = 0
     var crawledUrlNbLaps = 0
-    var inCrawlingUrlNb = 1
+    var inCrawlingUrlNb = 0
   }
 
 }

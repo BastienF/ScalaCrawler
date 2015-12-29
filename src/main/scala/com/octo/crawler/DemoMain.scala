@@ -10,8 +10,6 @@ object DemoMain {
   var running: Boolean = true
 
   def main(args: Array[String]) {
-    val system = ActorSystem("CrawlerSystem")
-
     def httpBasicAuthFormatter(httpBasicAuth: String): (String, String) = {
       if (httpBasicAuth == null || httpBasicAuth.isEmpty)
         ("", "")
@@ -30,6 +28,7 @@ object DemoMain {
       System.getProperty("proxyUrl"), proxyPort)
 
     webCrawler.addObservable().filter(crawledPage => crawledPage.errorCode < 200 || crawledPage.errorCode >= 400).subscribe(crawledPage => handleCrawledPage(crawledPage))
+    webCrawler.addObservable().count(crawledPage => true).doOnCompleted({println("CrawlingDone")}).foreach(nb => println("numberOfCrawledPages: " + nb))
 
     webCrawler.startCrawling(System.getProperty("startUrl"))
 

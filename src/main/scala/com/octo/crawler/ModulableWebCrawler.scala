@@ -17,7 +17,7 @@ class ModulableWebCrawler(val hostsToCrawl: Set[String], crawlingDepth: Int = 0,
 
   def addObservable():Observable[CrawledPage] = {
     Observable { observer =>
-      urlAggregator ! Subscribe(observer onNext)
+      urlAggregator ! Subscribe(observer)
       new Subscription {
         override def unsubscribe: Unit = urlAggregator ! Unsubscribe
       }
