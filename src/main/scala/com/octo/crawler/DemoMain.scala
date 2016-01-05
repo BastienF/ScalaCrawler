@@ -23,7 +23,7 @@ object DemoMain {
     val proxyPort: Int = if (proxyPortString == null || proxyPortString.isEmpty) 0 else proxyPortString.toInt
     val webCrawler: ModulableWebCrawler = new ModulableWebCrawler(System.getProperty("hosts").split(",").toSet,
       System.getProperty("depth").toInt, System.getProperty("retryNumber").toInt, httpBasicAuth._1, httpBasicAuth._2,
-      System.getProperty("proxyUrl"), proxyPort)
+      System.getProperty("proxyUrl"), proxyPort, true)
 
     webCrawler.addObservable().filter(crawledPage => crawledPage.errorCode < 200 || crawledPage.errorCode >= 400).subscribe(crawledPage => handleCrawledPage(crawledPage))
     webCrawler.addObservable().count(crawledPage => true).doOnCompleted({

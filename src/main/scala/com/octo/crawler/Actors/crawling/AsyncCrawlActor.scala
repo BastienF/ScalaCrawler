@@ -1,8 +1,8 @@
-package com.octo.crawler.Actors
+package com.octo.crawler.Actors.crawling
 
 import java.net._
 
-import akka.actor.{ActorRef, Actor, Props}
+import akka.actor.Props
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.HttpEntity.Strict
 import akka.http.scaladsl.model.{HttpRequest, HttpResponse}
@@ -17,39 +17,9 @@ import scala.util.{Failure, Success}
 /**
  * Created by bastien on 05/01/2015.
  */
-class AsyncCrawlActor(val retryNumberOnError: Int, httpBasicAuthLogin: String, httpBasicAuthPwd: String, proxyUrl: String, proxyPort: Int) extends Actor {
+class AsyncCrawlActor(retryNumberOnError: Int, httpBasicAuthLogin: String, httpBasicAuthPwd: String, proxyUrl: String, proxyPort: Int) extends ACrawlActor(retryNumberOnError: Int, httpBasicAuthLogin: String, httpBasicAuthPwd: String, proxyUrl: String, proxyPort: Int) {
 
-  override def receive: Receive = {
-    case (url: String, remainingDepth: Int, refererUrl: String) => crawlUrl(url, remainingDepth, refererUrl)
-  }
-
-  def crawlUrl(url: String, remainingDepth: Int, refererUrl: String): Unit = {
-    try {
-      executeRequest(url, remainingDepth, refererUrl, retryNumberOnError)
-    } catch {
-      case e: Exception => {
-        println( s"""HTTP request error on ${url} with ${e}""")
-      }
-
-    }
-  }
-
-  private final def handleResponse(aggregator: ActorRef, responseCode: Int, responseBody: String, remainingDepth: Int, url: String, refererUrl: String, retry: Int, headerLocation: String): Unit = {
-    val urlProperties = getUrlProperies(url)
-    aggregator ! new CrawlActorResponse(responseCode, responseBody, remainingDepth, url, refererUrl, urlProperties)
-
-    if (responseCode >= 300 && responseCode < 400) {
-      val redirectAbs: String = {
-        if (headerLocation.charAt(0).equals('/'))
-          urlProperties._3 + urlProperties._1 + urlProperties._2 + headerLocation
-        else
-          headerLocation
-      }
-      executeRequest(redirectAbs, remainingDepth, url, retry - 1)
-    }
-  }
-
-  private final def executeRequest(url: String, remainingDepth: Int, refererUrl: String, retry: Int): Unit = {
+  override final def executeRequest(url: String, remainingDepth: Int, refererUrl: String, retry: Int): Unit = {
     val aggregator = sender()
     val urlProperties = getUrlProperies(url)
     try {
@@ -83,15 +53,6 @@ class AsyncCrawlActor(val retryNumberOnError: Int, httpBasicAuthLogin: String, h
 
   private final def httpGet(url: String): Future[HttpResponse] = {
     Http()(context.system).singleRequest(HttpRequest(uri = url))(ActorMaterializer())
-  }
-
-  def getUrlProperies(url: String): (String, String, String) = {
-    val urlJava = new java.net.URL(url)
-    (urlJava getHost, if ((urlJava getPort) < 0) {
-      ""
-    } else {
-      ":" + urlJava.getPort
-    }, (urlJava getProtocol) + "://")
   }
 
   //TODO
