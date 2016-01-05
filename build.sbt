@@ -31,7 +31,9 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-remote" % "2.3.8",
   "com.typesafe.akka" %% "akka-agent" % "2.3.8",
   "org.scalaj" %% "scalaj-http" % "1.1.0",
-  "io.reactivex" %% "rxscala" % "0.25.1"
+  "io.reactivex" %% "rxscala" % "0.25.1",
+  "com.ning" % "async-http-client" % "1.9.31",
+  "com.typesafe.akka" % "akka-http-core-experimental_2.11" % "2.0.1"
 )
 
 

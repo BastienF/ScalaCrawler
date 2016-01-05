@@ -32,7 +32,6 @@ class CrawlActor(val retryNumberOnError: Int, httpBasicAuthLogin: String, httpBa
     try {
       val response: HttpResponse[String] =
         setAuth(setProxy(Http(url))).option(HttpOptions.allowUnsafeSSL).asString
-
       aggregator ! new CrawlActorResponse(response.code, response.body, remainingDepth, url, refererUrl, urlProperties)
 
       if (response.is3xx) {

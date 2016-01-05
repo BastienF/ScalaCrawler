@@ -1,7 +1,5 @@
 package com.octo.crawler
 
-import akka.actor._
-
 /**
  * Created by bastien on 05/01/2015.
  */
@@ -28,7 +26,9 @@ object DemoMain {
       System.getProperty("proxyUrl"), proxyPort)
 
     webCrawler.addObservable().filter(crawledPage => crawledPage.errorCode < 200 || crawledPage.errorCode >= 400).subscribe(crawledPage => handleCrawledPage(crawledPage))
-    webCrawler.addObservable().count(crawledPage => true).doOnCompleted({println("CrawlingDone")}).foreach(nb => println("numberOfCrawledPages: " + nb))
+    webCrawler.addObservable().count(crawledPage => true).doOnCompleted({
+      println("CrawlingDone")
+    }).foreach(nb => println("numberOfCrawledPages: " + nb))
 
     webCrawler.startCrawling(System.getProperty("startUrl"))
 
