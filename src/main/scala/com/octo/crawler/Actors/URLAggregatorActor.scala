@@ -1,37 +1,37 @@
 package com.octo.crawler.Actors
 
+import java.util.concurrent.Executor
+
 import akka.actor.{Actor, ActorRef, Props}
-import akka.pattern.ask
 import akka.routing.RoundRobinPool
-import akka.util.Timeout
 import com.octo.crawler.Actors.messages.{CrawlActorResponse, Subscribe}
-import com.octo.crawler.{DemoMain, CrawledPage}
+import com.octo.crawler.CrawledPage
 import rx.lang.scala.Subscriber
 
 import scala.annotation.tailrec
 import scala.collection.mutable
-import scala.concurrent.duration._
 
 /**
  * Created by bastien on 05/01/2015.
  */
-class URLAggregatorActor(val crawlingDepth: Int, crawlActor: ActorRef, parserActor: ActorRef) extends Actor {
+class URLAggregatorActor(val crawlingDepth: Int, crawlActor: ActorRef, parserActor: ActorRef, executor: Executor) extends Actor {
 
   import URLAggregatorActor._;
 
   override def receive = {
-    case Subscribe(subscriber) => context become ready(subscriber::Nil)
+    case Subscribe(subscriber) => context become ready(subscriber :: Nil)
   }
 
   def ready(subscriberList: List[Subscriber[CrawledPage]]): Receive = {
-    case Subscribe(subscriber) => context become ready(subscriber::subscriberList)
+    case Subscribe(subscriber) => context become ready(subscriber :: subscriberList)
     case "print" => printResult()
     case "printErrors" => printErrors()
     case "crawlingDone" => sthap(subscriberList)
     case url: String => crawlURLs(Set(url), crawlingDepth, "")
-    case CrawlActorResponse(responseCode : Int, responseBody : String, remainingDepth: Int, url: String, refererUrl: String, (urlHost: String, urlPort: String, urlProtocolString)) => {
-      //TODO à faire en asynchrone
-      subscriberList.foreach(subscriber => subscriber.onNext(new CrawledPage(url, responseCode, responseBody, refererUrl)))
+    case CrawlActorResponse(responseCode: Int, responseBody: String, remainingDepth: Int, url: String, refererUrl: String, (urlHost: String, urlPort: String, urlProtocolString)) => {
+      subscriberList.foreach(subscriber => executor.execute(new Runnable {
+        override def run(): Unit = subscriber.onNext(new CrawledPage(url, responseCode, responseBody, refererUrl))
+      }))
       if (responseCode < 300 || responseCode >= 400)
         parserActor !(responseBody, remainingDepth, refererUrl, (urlHost, urlPort, urlProtocolString))
     }
@@ -51,8 +51,9 @@ class URLAggregatorActor(val crawlingDepth: Int, crawlActor: ActorRef, parserAct
   }
 
   def sthap(subscriberList: List[Subscriber[CrawledPage]]): Unit = {
-    //TODO à faire en asynchrone
-    subscriberList.foreach(subscriber => subscriber.onCompleted())
+    subscriberList.foreach(subscriber => executor.execute(new Runnable {
+      override def run(): Unit = subscriberList.foreach(subscriber => subscriber.onCompleted())
+    }))
     context.system.shutdown()
   }
 
@@ -112,5 +113,5 @@ class URLAggregatorActor(val crawlingDepth: Int, crawlActor: ActorRef, parserAct
 }
 
 object URLAggregatorActor {
-  def props(crawlingDepth: Int, crawlActor: ActorRef, parserActor: ActorRef): Props = Props(new URLAggregatorActor(crawlingDepth, crawlActor, parserActor))
+  def props(crawlingDepth: Int, crawlActor: ActorRef, parserActor: ActorRef, executor: Executor): Props = Props(new URLAggregatorActor(crawlingDepth, crawlActor, parserActor, executor))
 }

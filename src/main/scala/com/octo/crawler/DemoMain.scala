@@ -1,5 +1,7 @@
 package com.octo.crawler
 
+import java.util.concurrent.{ExecutorService, Executors}
+
 /**
  * Created by bastien on 05/01/2015.
  */
@@ -21,18 +23,23 @@ object DemoMain {
 
     val proxyPortString: String = System.getProperty("proxyPort");
     val proxyPort: Int = if (proxyPortString == null || proxyPortString.isEmpty) 0 else proxyPortString.toInt
+    val threadPool: ExecutorService = Executors.newFixedThreadPool(10)
     val webCrawler: ModulableWebCrawler = new ModulableWebCrawler(System.getProperty("hosts").split(",").toSet,
       System.getProperty("depth").toInt, System.getProperty("retryNumber").toInt, httpBasicAuth._1, httpBasicAuth._2,
-      System.getProperty("proxyUrl"), proxyPort, true)
+      System.getProperty("proxyUrl"), proxyPort, threadPool, false)
+
+    val startTime = System.currentTimeMillis()
 
     webCrawler.addObservable().filter(crawledPage => crawledPage.errorCode < 200 || crawledPage.errorCode >= 400).subscribe(crawledPage => handleCrawledPage(crawledPage))
+
     webCrawler.addObservable().count(crawledPage => true).doOnCompleted({
-      println("CrawlingDone")
+      threadPool.shutdown()
+      val duration: Long = System.currentTimeMillis() - startTime
+      println("CrawlingDone in: " + duration.toString + "ms" )
+
     }).foreach(nb => println("numberOfCrawledPages: " + nb))
 
     webCrawler.startCrawling(System.getProperty("startUrl"))
-
-
   }
 
   def handleCrawledPage(crawledPage: CrawledPage): Unit = {
