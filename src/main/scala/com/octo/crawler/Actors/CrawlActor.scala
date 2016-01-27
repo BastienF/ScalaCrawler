@@ -29,7 +29,7 @@ class CrawlActor extends Actor {
     }
   }
 
-  private final def executeRequest(url2: String, remainingDepth: Int, refererUrl: String, retry: Int): Unit = {
+  private final def executeRequest(url2: String, remainingDepth: Int, refererUrl: String, retry: Int, redirectDepth: Int = 5): Unit = {
     val aggregator = sender()
     try {
 
@@ -61,15 +61,19 @@ class CrawlActor extends Actor {
       }, (urlJava getProtocol) + "://")
 
       if (response.is3xx) {
-        val redirectURL: Option[String] = response.headers.get("Location")
-        if (redirectURL.isDefined) {
-          val redirectAbs: String = {
-            if (redirectURL.get.charAt(0).equals('/'))
-              urlProperties._3 + urlProperties._1 + urlProperties._2 + redirectURL.get
-            else
-              redirectURL.get
+        if (redirectDepth < 0)
+          aggregator ! (-2, url2, refererUrl)
+        else {
+          val redirectURL: Option[String] = response.headers.get("Location")
+          if (redirectURL.isDefined) {
+            val redirectAbs: String = {
+              if (redirectURL.get.charAt(0).equals('/'))
+                urlProperties._3 + urlProperties._1 + urlProperties._2 + redirectURL.get
+              else
+                redirectURL.get
+            }
+            executeRequest(redirectAbs, remainingDepth, url2, retry, redirectDepth - 1)
           }
-          executeRequest(redirectAbs, remainingDepth, url2, retry - 1)
         }
       } else {
         aggregator !(response.body, remainingDepth, url2, urlProperties)
