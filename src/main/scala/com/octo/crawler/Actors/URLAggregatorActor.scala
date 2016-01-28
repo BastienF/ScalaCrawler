@@ -27,7 +27,7 @@ class URLAggregatorActor extends Actor {
     }
     case (code: Int, url: String, refererUrl: String) => {
       urlsInError.update(url, (code, refererUrl))
-      if (code == -1)
+      if (code < 0)
         urlCrawlingDone()
     }
     case (urls: Set[String], remainingDepth: Int, refererUrl: String) => {
