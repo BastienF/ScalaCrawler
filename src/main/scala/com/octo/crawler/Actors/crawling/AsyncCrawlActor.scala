@@ -19,7 +19,7 @@ import scala.util.{Failure, Success}
  */
 class AsyncCrawlActor(retryNumberOnError: Int, httpBasicAuthLogin: String, httpBasicAuthPwd: String, proxyUrl: String, proxyPort: Int) extends ACrawlActor(retryNumberOnError: Int, httpBasicAuthLogin: String, httpBasicAuthPwd: String, proxyUrl: String, proxyPort: Int) {
 
-  override final def executeRequest(url: String, remainingDepth: Int, refererUrl: String, retry: Int): Unit = {
+  override final def executeRequest(url: String, remainingDepth: Int, refererUrl: String, retry: Int, depthRedirect: Int = 5): Unit = {
     val aggregator = sender()
     val urlProperties = getUrlProperies(url)
     try {
@@ -30,7 +30,7 @@ class AsyncCrawlActor(retryNumberOnError: Int, httpBasicAuthLogin: String, httpB
           implicit val executionContext: ExecutionContext = context.system.dispatcher // TODO HAHAHAHA
           val bodyFuture: Future[Strict] = r.entity.toStrict(5 seconds)
           bodyFuture onComplete {
-            case Success(body) => handleResponse(aggregator, r.status.intValue(), body.data.decodeString("UTF-8"), remainingDepth, url, refererUrl, retry, if (r.getHeader("Location").isDefined) r.getHeader("Location").get.value() else "") //Pousser le futur dans un pool qui va supporter le wait
+            case Success(body) => handleResponse(aggregator, r.status.intValue(), body.data.decodeString("UTF-8"), remainingDepth, url, refererUrl, retry, if (r.getHeader("Location").isDefined) r.getHeader("Location").get.value() else "", depthRedirect) //Pousser le futur dans un pool qui va supporter le wait
             case Failure(f) => println("Error during parsing of: " + url + ": " + f.getMessage) //TODO crawlActor ! Status.Failure(f)
           }
         }

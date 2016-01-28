@@ -24,22 +24,25 @@ abstract class ACrawlActor(val retryNumberOnError: Int, httpBasicAuthLogin: Stri
     }
   }
 
-  final def handleResponse(aggregator: ActorRef, responseCode: Int, responseBody: String, remainingDepth: Int, url: String, refererUrl: String, retry: Int, headerLocation: String): Unit = {
+  final def handleResponse(aggregator: ActorRef, responseCode: Int, responseBody: String, remainingDepth: Int, url: String, refererUrl: String, retry: Int, headerLocation: String, depthRedirect: Int): Unit = {
     val urlProperties = getUrlProperies(url)
-    aggregator ! new CrawlActorResponse(responseCode, responseBody, remainingDepth, url, refererUrl, urlProperties)
+    if (depthRedirect > 0)
+      aggregator ! new CrawlActorResponse(responseCode, responseBody, remainingDepth, url, refererUrl, urlProperties)
+    else
+      aggregator ! new CrawlActorResponse(-2, responseBody, remainingDepth, url, refererUrl, urlProperties)
 
-    if (responseCode >= 300 && responseCode < 400) {
+    if (depthRedirect > 0 && responseCode >= 300 && responseCode < 400) {
       val redirectAbs: String = {
         if (headerLocation.charAt(0).equals('/'))
           urlProperties._3 + urlProperties._1 + urlProperties._2 + headerLocation
         else
           headerLocation
       }
-      executeRequest(redirectAbs, remainingDepth, url, retry - 1)
+      executeRequest(redirectAbs, remainingDepth, url, retry - 1, depthRedirect - 1)
     }
   }
 
-  def executeRequest(url: String, remainingDepth: Int, refererUrl: String, retry: Int): Unit
+  def executeRequest(url: String, remainingDepth: Int, refererUrl: String, retry: Int, depthRedirect: Int = 5): Unit
 
   def getUrlProperies(url: String): (String, String, String) = {
     val urlJava = new java.net.URL(url)

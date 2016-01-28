@@ -13,14 +13,14 @@ import scalaj.http.{Http, HttpOptions, HttpRequest, HttpResponse}
  */
 class SyncCrawlActor(retryNumberOnError: Int, httpBasicAuthLogin: String, httpBasicAuthPwd: String, proxyUrl: String, proxyPort: Int) extends ACrawlActor(retryNumberOnError: Int, httpBasicAuthLogin: String, httpBasicAuthPwd: String, proxyUrl: String, proxyPort: Int) {
 
-  override final def executeRequest(url: String, remainingDepth: Int, refererUrl: String, retry: Int): Unit = {
+  override final def executeRequest(url: String, remainingDepth: Int, refererUrl: String, retry: Int, depthRedirect: Int = 5): Unit = {
     val aggregator = sender()
     val urlProperties = getUrlProperies(url)
     try {
       val response: HttpResponse[String] =
         setAuth(setProxy(Http(url))).option(HttpOptions.allowUnsafeSSL).asString
       val optionnalLocationHeader: Option[String] = response.headers.get("Location")
-      handleResponse(aggregator, response.code, response.body, remainingDepth, url, refererUrl, retry, if (optionnalLocationHeader.isDefined) optionnalLocationHeader.get else "")
+      handleResponse(aggregator, response.code, response.body, remainingDepth, url, refererUrl, retry, if (optionnalLocationHeader.isDefined) optionnalLocationHeader.get else "", depthRedirect)
     } catch {
       case e@(_: SocketTimeoutException | _: ConnectException) if retry > 0 => {
         println( s"""retry #${retryNumberOnError - (retry - 1)} : ${url}| error: ${e}""")
