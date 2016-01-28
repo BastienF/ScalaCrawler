@@ -33,7 +33,7 @@ class URLAggregatorActor(val crawlingDepth: Int, crawlActor: ActorRef, parserAct
         override def run(): Unit = subscriber.onNext(new CrawledPage(url, responseCode, responseBody, refererUrl))
       }))
       if (responseCode < 300 || responseCode >= 400)
-        parserActor !(responseBody, remainingDepth, refererUrl, (urlHost, urlPort, urlProtocolString))
+        parserActor !(responseBody, remainingDepth, url, (urlHost, urlPort, urlProtocolString))
     }
     case (urls: Set[String], remainingDepth: Int, refererUrl: String) => {
       crawlURLs(urls, remainingDepth - 1, refererUrl)
