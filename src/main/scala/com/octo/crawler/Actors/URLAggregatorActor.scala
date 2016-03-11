@@ -3,8 +3,10 @@ package com.octo.crawler.Actors
 import java.util.concurrent.Executor
 
 import akka.actor.{Actor, ActorRef, Props}
-import akka.routing.RoundRobinPool
-import com.octo.crawler.Actors.messages.{CrawlActorResponse, Subscribe}
+import com.octo.crawler.Actors.ParserActor.ParseUrlsFromThisHTTPResponse
+import com.octo.crawler.Actors.URLAggregatorActor._
+import com.octo.crawler.Actors.crawling.ACrawlActor.ExecuteHTTPRequest
+import com.octo.crawler.AkkaWorkflowExceptions.{NotImplementedMessageException, WrongMessageException}
 import com.octo.crawler.CrawledPage
 import rx.lang.scala.Subscriber
 
@@ -19,38 +21,40 @@ class URLAggregatorActor(val crawlingDepth: Int, crawlActor: ActorRef, parserAct
   import URLAggregatorActor._;
 
   override def receive = {
-    case Subscribe(subscriber) => context become ready(subscriber :: Nil)
+    case RegisterThisSubscriber(subscriber) => context become ready(Set(subscriber))
+    case x: URLAggregatorActorMessages => throw NotImplementedMessageException(x)
+    case x => throw WrongMessageException(x, sender())
   }
 
-  def ready(subscriberList: List[Subscriber[CrawledPage]]): Receive = {
-    case Subscribe(subscriber) => context become ready(subscriber :: subscriberList)
-    case "print" => printResult()
-    case "printErrors" => printErrors()
-    case "crawlingDone" => sthap(subscriberList)
-    case url: String => crawlURLs(Set(url), crawlingDepth, "")
-    case CrawlActorResponse(responseCode: Int, responseBody: String, remainingDepth: Int, url: String, refererUrl: String, (urlHost: String, urlPort: String, urlProtocolString)) => {
+  def ready(subscriberList: Set[Subscriber[CrawledPage]]): Receive = {
+    case RegisterThisSubscriber(subscriber) => context become ready(subscriberList + subscriber)
+    case UnregisterThisSubscriber(subscriber) => context become ready(subscriberList - subscriber)
+    case StopCrawling => sthap(subscriberList)
+    case StartOnThisUrl(url) => crawlURLs(Set(url), crawlingDepth, "")
+    case CrawlThisUrlSet(urls: Set[String], remainingDepth: Int, refererUrl: String) => {
+      crawlURLs(urls, remainingDepth - 1, refererUrl)
+      urlCrawlingDone()
+    }
+    case ExposeThisPageResponse(responseCode: Int, responseBody: String, remainingDepth: Int, url: String, refererUrl: String, (urlHost: String, urlPort: String, urlProtocolString)) => {
       subscriberList.foreach(subscriber => executor.execute(new Runnable {
         override def run(): Unit = subscriber.onNext(new CrawledPage(url, responseCode, responseBody, refererUrl))
       }))
       if (responseCode < 300 || responseCode >= 400)
-        parserActor !(responseBody, remainingDepth, url, (urlHost, urlPort, urlProtocolString))
+        parserActor ! ParseUrlsFromThisHTTPResponse(responseBody, remainingDepth, url, (urlHost, urlPort, urlProtocolString))
     }
-    case (urls: Set[String], remainingDepth: Int, refererUrl: String) => {
-      crawlURLs(urls, remainingDepth - 1, refererUrl)
-      urlCrawlingDone()
-    }
-    case x => println( s"""I don't know how to handle ${x}""")
+    case x: URLAggregatorActorMessages => throw NotImplementedMessageException(x)
+    case x => throw WrongMessageException(x, sender())
   }
 
   def urlCrawlingDone(): Unit = {
     crawledUrlNb += 1
     inCrawlingUrlNb -= 1
     if (inCrawlingUrlNb <= 0) {
-      self ! "crawlingDone"
+      self ! StopCrawling
     }
   }
 
-  def sthap(subscriberList: List[Subscriber[CrawledPage]]): Unit = {
+  def sthap(subscriberList: Set[Subscriber[CrawledPage]]): Unit = {
     subscriberList.foreach(subscriber => executor.execute(new Runnable {
       override def run(): Unit = subscriberList.foreach(subscriber => subscriber.onCompleted())
     }))
@@ -58,24 +62,8 @@ class URLAggregatorActor(val crawlingDepth: Int, crawlActor: ActorRef, parserAct
   }
 
   def crawlUrl(url: String, remainingDepth: Int, refererUrl: String) = {
-    crawlActor !(url, remainingDepth, refererUrl)
+    crawlActor ! ExecuteHTTPRequest(url, remainingDepth, refererUrl)
     crawledUrls.add(url)
-  }
-
-  def printResult(): Unit = {
-    println("Start agregating")
-    println( s"""Number of crawled URLs : ${crawledUrlNb}""")
-    println( s"""Number of crawling URLs : ${inCrawlingUrlNb}""")
-    val currentTime = System.currentTimeMillis()
-    println( s"""Speed : ${crawledUrlNb / Math.max(1, (currentTime - URLAggregatorActor.startTime) / 1000)} url/s""")
-    println( s"""Instant speed : ${(crawledUrlNb - crawledUrlNbLaps) / Math.max(1, (currentTime - timeLaps) / 1000)} url/s""")
-    timeLaps = currentTime
-    crawledUrlNbLaps = crawledUrlNb
-    URLAggregatorActor.displayActor ! crawledUrls
-  }
-
-  def printErrors(): Unit = {
-    URLAggregatorActor.displayActor !("errors", urlsInError)
   }
 
   @tailrec
@@ -101,8 +89,6 @@ class URLAggregatorActor(val crawlingDepth: Int, crawlActor: ActorRef, parserAct
 
   object URLAggregatorActor {
     val startTime = System.currentTimeMillis()
-    val displayActor = context.actorOf(RoundRobinPool(1).props(Props[DisplayMapActor]), "displayRouter")
-    val urlsInError = mutable.Map[String, (Int, String)]()
     val crawledUrls = mutable.Set[String]()
     var timeLaps = startTime
     var crawledUrlNb = 0
@@ -114,4 +100,22 @@ class URLAggregatorActor(val crawlingDepth: Int, crawlActor: ActorRef, parserAct
 
 object URLAggregatorActor {
   def props(crawlingDepth: Int, crawlActor: ActorRef, parserActor: ActorRef, executor: Executor): Props = Props(new URLAggregatorActor(crawlingDepth, crawlActor, parserActor, executor))
+
+  sealed trait URLAggregatorActorMessages
+
+  case class ExposeThisPageResponse(responseCode: Int, responseBody: String, remainingDepth: Int, url: String, refererUrl: String, urlProperties: (String, String, String)) extends URLAggregatorActorMessages
+
+  case class StartOnThisUrl(url: String) extends URLAggregatorActorMessages
+
+  case class CrawlThisUrls(urls: Set[String]) extends URLAggregatorActorMessages
+
+  case object StopCrawling extends URLAggregatorActorMessages
+
+  case class CrawlThisUrlSet(urls: Set[String], remainingDepth: Int, refererUrl: String) extends URLAggregatorActorMessages
+
+  case class RegisterThisSubscriber(subscriber: Subscriber[CrawledPage]) extends URLAggregatorActorMessages
+
+  case class UnregisterThisSubscriber(listener: Subscriber[CrawledPage]) extends URLAggregatorActorMessages
+
 }
+

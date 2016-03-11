@@ -3,7 +3,7 @@ package com.octo.crawler.Actors.crawling
 import java.net._
 
 import akka.actor.Props
-import com.octo.crawler.Actors.messages.CrawlActorResponse
+import com.octo.crawler.Actors.URLAggregatorActor.ExposeThisPageResponse
 
 import scalaj.http.{Http, HttpOptions, HttpRequest, HttpResponse}
 
@@ -23,13 +23,13 @@ class SyncCrawlActor(retryNumberOnError: Int, httpBasicAuthLogin: String, httpBa
       handleResponse(aggregator, response.code, response.body, remainingDepth, url, refererUrl, retry, if (optionnalLocationHeader.isDefined) optionnalLocationHeader.get else "", depthRedirect)
     } catch {
       case e@(_: SocketTimeoutException | _: ConnectException) if retry > 0 => {
-        println( s"""retry #${retryNumberOnError - (retry - 1)} : ${url}| error: ${e}""")
+        println( s"""retry #${retryNumberOnError - (retry - 1)} : ${url}|error: ${e}""")
         Thread sleep 500 + (1500 * retryNumberOnError - (retry))
         executeRequest(url, remainingDepth, refererUrl, retry - 1)
       }
       case e: Exception => {
         println( s"""HTTP request error on ${url} with ${e}""")
-        aggregator ! new CrawlActorResponse(-1, "", remainingDepth, url, refererUrl, urlProperties)
+        aggregator ! new ExposeThisPageResponse(-1, "", remainingDepth, url, refererUrl, urlProperties)
       }
     }
   }
@@ -40,6 +40,7 @@ class SyncCrawlActor(retryNumberOnError: Int, httpBasicAuthLogin: String, httpBa
     else
       request.proxy(proxyUrl, proxyPort)
   }
+
   def setAuth(request: HttpRequest) = {
     if (httpBasicAuthLogin == null || httpBasicAuthLogin.isEmpty)
       request

@@ -4,8 +4,8 @@ import java.util.concurrent.Executor
 
 import akka.actor.ActorSystem
 import akka.routing.RoundRobinPool
+import com.octo.crawler.Actors.URLAggregatorActor.{UnregisterThisSubscriber, RegisterThisSubscriber, StartOnThisUrl}
 import com.octo.crawler.Actors.crawling.ACrawlActor
-import com.octo.crawler.Actors.messages.{Subscribe, Unsubscribe}
 import com.octo.crawler.Actors.{ParserActor, URLAggregatorActor}
 import rx.lang.scala.{Observable, Subscription}
 
@@ -21,15 +21,15 @@ class ModulableWebCrawler(val hostsToCrawl: Set[String], crawlingDepth: Int = 0,
 
   def addObservable(): Observable[CrawledPage] = {
     Observable { observer =>
-      urlAggregator ! Subscribe(observer)
+      urlAggregator ! RegisterThisSubscriber(observer)
       new Subscription {
-        override def unsubscribe: Unit = urlAggregator ! Unsubscribe
+        override def unsubscribe: Unit = urlAggregator ! UnregisterThisSubscriber(observer)
       }
     }
   }
 
   def startCrawling(startingUrl: String): ModulableWebCrawler = {
-    urlAggregator ! startingUrl
+    urlAggregator ! StartOnThisUrl(startingUrl)
     this
   }
 }

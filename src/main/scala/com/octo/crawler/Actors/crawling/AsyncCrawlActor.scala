@@ -7,7 +7,7 @@ import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.HttpEntity.Strict
 import akka.http.scaladsl.model.{HttpRequest, HttpResponse}
 import akka.stream.{ActorMaterializer, Materializer}
-import com.octo.crawler.Actors.messages.CrawlActorResponse
+import com.octo.crawler.Actors.URLAggregatorActor.ExposeThisPageResponse
 
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
@@ -46,7 +46,7 @@ class AsyncCrawlActor(retryNumberOnError: Int, httpBasicAuthLogin: String, httpB
       }
       case e: Exception => {
         println( s"""HTTP request error on ${url} with ${e}""")
-        aggregator ! new CrawlActorResponse(-1, "", remainingDepth, url, refererUrl, urlProperties)
+        aggregator ! new ExposeThisPageResponse(-1, "", remainingDepth, url, refererUrl, urlProperties)
       }
     }
   }

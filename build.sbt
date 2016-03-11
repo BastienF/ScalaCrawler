@@ -13,9 +13,6 @@ lazy val commonSettings = Seq(
   scalaVersion := "2.10.1"
 )
 
-lazy val app = (project in file("app")).
-  settings(commonSettings: _*)
-
 resolvers ++= Seq(
   "Maven Central Server" at "http://repo1.maven.org/maven2"
 )

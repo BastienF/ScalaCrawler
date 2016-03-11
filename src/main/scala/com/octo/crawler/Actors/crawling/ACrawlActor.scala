@@ -1,7 +1,9 @@
 package com.octo.crawler.Actors.crawling
 
-import akka.actor.{Actor, ActorRef, Props}
-import com.octo.crawler.Actors.messages.CrawlActorResponse
+import akka.actor._
+import com.octo.crawler.Actors.URLAggregatorActor.ExposeThisPageResponse
+import com.octo.crawler.Actors.crawling.ACrawlActor.{CrawlActorMessage, ExecuteHTTPRequest}
+import com.octo.crawler.AkkaWorkflowExceptions.{NotImplementedMessageException, WrongMessageException}
 
 
 /**
@@ -10,7 +12,9 @@ import com.octo.crawler.Actors.messages.CrawlActorResponse
 abstract class ACrawlActor(val retryNumberOnError: Int, httpBasicAuthLogin: String, httpBasicAuthPwd: String, proxyUrl: String, proxyPort: Int) extends Actor {
 
   override def receive: Receive = {
-    case (url: String, remainingDepth: Int, refererUrl: String) => crawlUrl(url, remainingDepth, refererUrl)
+    case ExecuteHTTPRequest(url: String, remainingDepth: Int, refererUrl: String) => crawlUrl(url, remainingDepth, refererUrl)
+    case x: CrawlActorMessage => throw NotImplementedMessageException(x)
+    case x => throw WrongMessageException(x, sender())
   }
 
   def crawlUrl(url: String, remainingDepth: Int, refererUrl: String): Unit = {
@@ -27,9 +31,9 @@ abstract class ACrawlActor(val retryNumberOnError: Int, httpBasicAuthLogin: Stri
   final def handleResponse(aggregator: ActorRef, responseCode: Int, responseBody: String, remainingDepth: Int, url: String, refererUrl: String, retry: Int, headerLocation: String, depthRedirect: Int): Unit = {
     val urlProperties = getUrlProperies(url)
     if (depthRedirect > 0)
-      aggregator ! new CrawlActorResponse(responseCode, responseBody, remainingDepth, url, refererUrl, urlProperties)
+      aggregator ! ExposeThisPageResponse(responseCode, responseBody, remainingDepth, url, refererUrl, urlProperties)
     else
-      aggregator ! new CrawlActorResponse(-2, responseBody, remainingDepth, url, refererUrl, urlProperties)
+      aggregator ! ExposeThisPageResponse(-2, responseBody, remainingDepth, url, refererUrl, urlProperties)
 
     if (depthRedirect > 0 && responseCode >= 300 && responseCode < 400) {
       val redirectAbs: String = {
@@ -57,10 +61,15 @@ abstract class ACrawlActor(val retryNumberOnError: Int, httpBasicAuthLogin: Stri
 object ACrawlActor {
   def props(retryNumberOnError: Int, httpBasicAuthLogin: String, httpBasicAuthPwd: String, proxyUrl: String, proxyPort: Int, async: Boolean): Props = {
     if (async)
-     AsyncCrawlActor.props(retryNumberOnError, httpBasicAuthLogin, httpBasicAuthPwd, proxyUrl, proxyPort)
+      AsyncCrawlActor.props(retryNumberOnError, httpBasicAuthLogin, httpBasicAuthPwd, proxyUrl, proxyPort)
     else
       SyncCrawlActor.props(retryNumberOnError, httpBasicAuthLogin, httpBasicAuthPwd, proxyUrl, proxyPort)
   }
+
+  sealed trait CrawlActorMessage
+
+  case class ExecuteHTTPRequest(url: String, remainingDepth: Int, refererUrl: String) extends CrawlActorMessage
+
 }
 
 
